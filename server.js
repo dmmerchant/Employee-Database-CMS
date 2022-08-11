@@ -105,14 +105,12 @@ async function main() {
             break;
 
         case `${ansi.yellow}Update a Role`:
-            try{await employeeDB.updateRole();
-            } catch (error){
-                console.log(error)
-            }
+            await employeeDB.updateRole();
             main();
             break;
 
         case `${ansi.yellow}Update an Employee`:
+            await employeeDB.updateEmployee();
             main();
             break;
 
@@ -158,7 +156,7 @@ async function displayTable(query) {
     if (rows.length == 0) {
         console.log(`\n**There are no records to display**\n`)
     } else {
-        console.info(` \n \n`);
+        console.info(`\n`);
         console.table(rows);
     }
     //Gives the user a chance to view table before returning to the main menu
