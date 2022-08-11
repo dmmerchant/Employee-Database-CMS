@@ -4,6 +4,7 @@ const db = require('./config/connection');
 const ansi = require('./helpers/consoleColors')
 const welcomeLogo = require('./lib/WelcomeLogo');
 const employeeDB = require("./lib/EmployeeDB");
+const { updateDepartment } = require("./lib/EmployeeDB");
 const mainMenuList = [
     {
         type: "list",
@@ -40,14 +41,6 @@ const mainMenuList = [
 ]
 
 
-const responsePause = [
-    {
-        type: "input",
-        name: "type",
-        message: "Press ENTER to return to main menu..."
-    }
-]
-
 function init() {
     console.log(welcomeLogo)
     main();
@@ -55,7 +48,7 @@ function init() {
 
 async function main() {
     var [rows, fields] = [[], []];
-    var employee,manager,department,role
+    var employee,manager,department,role,query
     var val = await inquirer.prompt(mainMenuList);
     switch (val.type) {
         case `${ansi.green}View All Departments`:
@@ -67,60 +60,37 @@ async function main() {
             break;
 
         case `${ansi.green}View All Employees`:
-            allEmployees();
+            query = await employeeDB.employeeOrder();
+            displayTable(query);
             break;
 
         case `${ansi.green}View All Managers`:
-            [rows, fields] = await db.query(employeeDB.searchManagers())
-            manager = rows.map(x => `'${x.name}'`);
-            allEmployees(`concat(a.first_name," ", a.last_name) in (${manager.join(",")})`);
+            query = await employeeDB.allManagers();
+            displayTable(query)
             break;
 
         case `${ansi.green}View Employees by Manager`:
-            manager = await employeeDB.selectManager();
-            allEmployees(`c.name = '${manager}'`)
+            query = await employeeDB.employeeByManager();
+            displayTable(query);
             break;
 
         case `${ansi.green}View Employees by Department`:
-            department = await employeeDB.selectDepartment();
-            allEmployees(`Department = '${department}'`)
+            query = await employeeDB.employeeByDepartment();
+            displayTable(query);
             break;
 
         case `${ansi.green}View Employees by Role`:
-            role = await employeeDB.selectRole();
-            allEmployees(`Title = '${role}'`)
+            query = await employeeDB.employeeByRole();
+            displayTable(query);
             break;
 
         case `${ansi.blue}Add a Deparment`:
-            var val = await inquirer.prompt(
-                [{
-                    type: "input",
-                    name: "name",
-                    message: "What is the name of the department?",
-                }]
-            );
-            await employeeDB.inputRecord("department", "name", `'${val.name}'`);
+            await employeeDB.addDepartment();
             main();
             break;
 
         case `${ansi.blue}Add a Role`:
-            var val = await inquirer.prompt(
-                [
-                    {
-                        type: "input",
-                        name: "title",
-                        message: "What is the name of the Role?",
-                    },
-                    {
-                        type: "input",
-                        name: "salary",
-                        message: "What is the salary for this role?"
-                    }
-                ]
-            );
-            department = await employeeDB.selectDepartment("What department does this role belong to?");
-            [rows, fields] = await db.query(employeeDB.searchDepartments(`name = '${department}'`));
-            await employeeDB.inputRecord("role", "title,salary,department_id", `'${val.title}',${val.salary},${rows[0].id}`);
+            await employeeDB.addRole();
             main();
             break;
 
@@ -130,35 +100,34 @@ async function main() {
             break;
 
         case `${ansi.yellow}Update a Department`:
-
+            await employeeDB.updateDepartment();
+            main();
             break;
 
         case `${ansi.yellow}Update a Role`:
-
+            try{await employeeDB.updateRole();
+            } catch (error){
+                console.log(error)
+            }
+            main();
             break;
 
         case `${ansi.yellow}Update an Employee`:
-            
+            main();
             break;
 
         case `${ansi.red}Delete a Department`:
-            department = await employeeDB.selectDepartment("What department would you like to delete?");
-            [rows, fields] = await db.query(employeeDB.searchDepartments(`name = '${department}'`));
-            await employeeDB.deleteRecord("department",rows[0].id);
+            await employeeDB.deleteDepartment();
             main();
             break;
 
         case `${ansi.red}Delete a Role`:
-            role = await employeeDB.selectRole("What role would you like to delete?");
-            [rows, fields] = await db.query(employeeDB.searchRoles(`title = '${role}'`));
-            await employeeDB.deleteRecord("role",rows[0].id);
+            await employeeDB.deleteRole();
             main();
             break;
 
         case `${ansi.red}Delete an Employee`:
-            employee = await employeeDB.selectEmployee("What employee would you like to delete?");
-            [rows, fields] = await db.query(employeeDB.searchEmpFullName(`${employee}`));
-            await employeeDB.deleteRecord("employee",rows[0].id);
+            await employeeDB.deleteEmployee();
             main();
             break;
 
@@ -169,51 +138,47 @@ async function main() {
         case `${ansi.cyan}Get Utilized Budget by Role`:
             displayTable(employeeDB.budgetRole())
             break;
-            break;
 
         case `${ansi.magenta}EXIT`:
-
+            
+            exitMenu();
             break;
     }
 
 };
 
-async function allEmployees(whereClause = '') {
-    var val = await inquirer.prompt(
-        [{
-            type: "list",
-            name: "type",
-            message: "How would you like employees to be displayed?",
-            choices: [
-                'First Name | Last Name',
-                'Last Name | First Name'
-            ]
-        }]
-    );
-    if (val.type == 'First Name | Last Name') {
-        displayTable(employeeDB.employeeByFirst(whereClause))
-    } else {
-        displayTable(employeeDB.employeeByLast(whereClause))
-    }
-}
+
 
 
 async function displayTable(query) {
+    //get the data using the supplied query
     const [rows, fields] = await db.query(query);
+
+    //if no records are returned, display appropriate message, otherwise display table
     if (rows.length == 0) {
         console.log(`\n**There are no records to display**\n`)
     } else {
         console.info(` \n \n`);
         console.table(rows);
     }
-    await inquirer.prompt(responsePause);
+    //Gives the user a chance to view table before returning to the main menu
+    await inquirer.prompt(
+        [
+            {
+                type: "input",
+                name: "type",
+                message: "Press ENTER to return to main menu..."
+            }
+        ]
+    );
     main();
 }
 
 
 
 function exitMenu() {
-
+    console.log("\nGoodbye!");
+    process.exit(0);
 }
 
 
